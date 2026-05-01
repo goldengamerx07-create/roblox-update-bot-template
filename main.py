@@ -1,94 +1,74 @@
-import os
 import requests
-import discord
-import asyncio
+import time
 
 # =========================
-# CONFIG (ENV VARIABLES)
+# CONFIG
 # =========================
 
-TOKEN = ma5rfQztZsx8BZT-etDfb6DkIBRAv-jAjC665Nfiwj3iAtUFw_PE-vH-OdfWzAiayPLS
-CHANNEL_ID = 1499676874740076565
-UNIVERSE_ID = int(os.getenv("UNIVERSE_ID"))
+WEBHOOK_URL = "YOUR_DISCORD_WEBHOOK_HERE"
+UNIVERSE_ID = 5132638887
 
 # =========================
-# DISCORD SETUP
-# =========================
-
-intents = discord.Intents.default()
-client = discord.Client(intents=intents)
-
-# =========================
-# STATE STORAGE
+# STATE
 # =========================
 
 last_update = None
 last_products = {}
 
 # =========================
-# ROBLOX API FUNCTIONS
+# SEND FUNCTION
+# =========================
+
+def send(msg):
+    requests.post(WEBHOOK_URL, json={"content": msg})
+
+# =========================
+# ROBLOX API
 # =========================
 
 def get_game():
     url = f"https://games.roblox.com/v1/games?universeIds={UNIVERSE_ID}"
-    r = requests.get(url).json()
-    return r["data"][0]
+    return requests.get(url).json()["data"][0]
 
 def get_products():
     url = f"https://develop.roblox.com/v1/universes/{UNIVERSE_ID}/developerproducts"
-    r = requests.get(url).json()
-    return r.get("data", [])
+    return requests.get(url).json().get("data", [])
 
 # =========================
-# BOT LOGIC
+# LOOP
 # =========================
 
-@client.event
-async def on_ready():
-    print(f"Logged in as {client.user}")
+while True:
+    try:
+        # -------------------------
+        # GAME UPDATE CHECK
+        # -------------------------
+        game = get_game()
 
-    channel = client.get_channel(CHANNEL_ID)
-    global last_update, last_products
+        global last_update
 
-    while True:
-        try:
-            # -------------------------
-            # GAME UPDATE CHECK
-            # -------------------------
-            game = get_game()
+        if last_update and game["updated"] != last_update:
+            send(f"🚀 **Game Updated!**\n`{game['updated']}`")
 
-            if last_update and game["updated"] != last_update:
-                await channel.send(
-                    f"🚀 **Game Updated!**\nTimestamp: `{game['updated']}`"
-                )
+        last_update = game["updated"]
 
-            last_update = game["updated"]
+        # -------------------------
+        # DEV PRODUCTS CHECK
+        # -------------------------
+        products = get_products()
+        current = {p["id"]: p for p in products}
 
-            # -------------------------
-            # DEV PRODUCTS CHECK
-            # -------------------------
-            products = get_products()
-            current = {p["id"]: p for p in products}
+        global last_products
 
-            for pid, product in current.items():
-                if pid not in last_products:
-                    await channel.send(
-                        f"🆕 **New Dev Product**\n{product['name']} - {product['price']} Robux"
-                    )
-                elif product["price"] != last_products[pid]["price"]:
-                    await channel.send(
-                        f"💲 **Price Changed**\n{product['name']} → {product['price']} Robux"
-                    )
+        for pid, product in current.items():
+            if pid not in last_products:
+                send(f"🆕 **New Dev Product**\n{product['name']} - {product['price']} Robux")
+            elif product["price"] != last_products[pid]["price"]:
+                send(f"💲 **Price Changed**\n{product['name']} → {product['price']} Robux")
 
-            last_products = current
+        last_products = current
 
-        except Exception as e:
-            print("Error:", e)
+    except Exception as e:
+        print("Error:", e)
 
-        await asyncio.sleep(60)
-
-# =========================
-# START BOT
-# =========================
-
-client.run(TOKEN)
+    time.sleep(60)
